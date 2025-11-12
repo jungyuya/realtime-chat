@@ -40,3 +40,91 @@
 .read-the-docs {
   color: #888;
 }
+
+
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 2rem;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.modal-content form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.modal-content input {
+  padding: 0.5rem;
+  font-size: 1rem;
+}
+
+.modal-content button {
+  padding: 0.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+
+.chat-room {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-width: 600px;
+  margin: auto;
+  border: 1px solid #ccc;
+}
+.message-list {
+  flex-grow: 1;
+  padding: 1rem;
+  overflow-y: auto;
+}
+.message-item {
+  margin-bottom: 0.5rem;
+}
+.message-item.me {
+  text-align: right;
+}
+.message-item p {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 18px;
+  background-color: #f0f0f0;
+}
+.message-item.me p {
+  background-color: #007bff;
+  color: white;
+}
+.message-input {
+  display: flex;
+  padding: 1rem;
+}
+.message-input input {
+  flex-grow: 1;
+  padding: 0.5rem;
+}
+
+.sender-nickname {
+  font-size: 0.8rem;
+  color: #555;
+  display: block;
+  margin-bottom: 4px;
+}
+.message-item.other {
+  text-align: left;
+}
