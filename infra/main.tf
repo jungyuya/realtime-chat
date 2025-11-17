@@ -16,7 +16,7 @@ provider "google" {
 
   # 리소스를 생성할 프로젝트 ID와 리전(Region), 영역(Zone)을 지정합니다.
   # TODO: "your-gcp-project-id" 부분을 당신의 실제 GCP 프로젝트 ID로 바꿔야 합니다.
-  project = "your-gcp-project-id"
+  project = "realtime-chat-project-478509"
   region  = "asia-northeast3" # 서울 리전
   zone    = "asia-northeast3-a" # 서울 리전의 a 영역
 }
