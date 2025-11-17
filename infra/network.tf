@@ -13,14 +13,11 @@ resource "google_compute_network" "vpc_network" {
 # ------------------------------------------------------------------------------
 resource "google_compute_subnetwork" "subnet" {
   name          = "realtime-chat-subnet"
-  # 이 서브넷이 속할 VPC 네트워크를 지정합니다.
-  # google_compute_network.vpc_network.id는 위에서 만든 VPC의 ID를 참조합니다.
+
   network       = google_compute_network.vpc_network.id
   # 이 서브넷이 사용할 IP 주소 범위를 지정합니다. (사설 IP 대역)
   ip_cidr_range = "10.10.10.0/24"
-  # 이 서브넷이 위치할 리전을 지정합니다.
-  # var.gcp_region은 변수로 관리할 수 있지만, 여기서는 main.tf의 값을 따릅니다.
-  region        = "asia-northeast3"
+  region        = "var.gcp_region"
 }
 
 # ------------------------------------------------------------------------------
@@ -31,18 +28,12 @@ resource "google_compute_firewall" "allow_http_https_ssh" {
   name    = "allow-http-https-ssh"
   # 이 방화벽 규칙이 적용될 네트워크를 지정합니다.
   network = google_compute_network.vpc_network.name
-
-  # "ingress"는 들어오는 트래픽에 대한 규칙임을 의미합니다.
+  # "ingress"는 들어오는 트래픽에 대한 규칙을 의미.
   direction = "INGRESS"
-
-  # 어떤 프로토콜과 포트를 허용할지 정의합니다.
   allow {
     protocol = "tcp"
     ports    = ["22", "80", "443"] # SSH, HTTP, HTTPS
-  }
-
-  # 어떤 IP 주소로부터의 요청을 허용할지 지정합니다.
-  # "0.0.0.0/0"은 "인터넷의 모든 IP"를 의미합니다.
+  }.
   source_ranges = ["0.0.0.0/0"]
 }
 

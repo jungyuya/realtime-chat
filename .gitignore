@@ -14,6 +14,8 @@ Thumbs.db
 .env.*
 !.env.example
 
+
+
 # =========================================
 # Node.js / pnpm
 # =========================================
@@ -40,3 +42,11 @@ apps/backend/realtime-chat
 .terraform/
 *.tfstate
 *.tfstate.backup
+
+
+# =========================================
+# Infra
+# =========================================
+infra/gcp-credentials.json
+*.tfstate*
+infra/terraform.tfvars

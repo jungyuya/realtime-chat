@@ -1,3 +1,0 @@
-# Terraform state and credentials
-infra/gcp-credentials.json
-*.tfstate*
