@@ -1,0 +1,6 @@
+# Git 관련 파일 제외
+.git
+.gitignore
+
+# 로컬 환경 변수 파일 제외 (컨테이너에는 docker-compose를 통해 주입)
+.env

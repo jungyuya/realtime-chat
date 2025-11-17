@@ -1,0 +1,13 @@
+# 의존성 폴더 (컨테이너 안에서 pnpm install로 다시 설치할 것임)
+node_modules
+
+# 빌드 결과물 (컨테이너 안에서 pnpm build로 다시 생성할 것임)
+dist
+
+# Git 관련 파일
+.git
+.gitignore
+
+# 로컬 환경 변수 파일
+.env
+.env.*

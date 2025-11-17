@@ -1,28 +1,46 @@
-import { useEffect, useRef } from 'react'; // useRef와 useEffect 임포트
+import { useEffect, useRef, Fragment } from 'react';
 import useChatStore from '../store/chatStore';
 import MessageItem from './MessageItem';
+import { isSameDay, format } from 'date-fns';
 
 const MessageList = () => {
   const { messages } = useChatStore();
-  // div 요소를 참조할 ref 객체를 생성합니다.
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const scrollToBottom = () => {
-    // ref가 가리키는 요소(마지막 빈 div)를 화면에 보이도록 스크롤합니다.
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // messages 배열이 변경될 때마다 scrollToBottom 함수를 호출합니다.
   useEffect(() => {
     scrollToBottom();
-  }, [messages]); // 의존성 배열에 messages를 넣어, messages가 바뀔 때만 실행되도록 함
+  }, [messages]);
 
   return (
-    <div className="message-list">
-      {messages.map((msg) => (
-        <MessageItem key={msg.id} message={msg} />
-      ))}
-      {/* 항상 메시지 목록의 가장 마지막에 위치하는 보이지 않는 요소 */}
+    // p-4: 내부 여백 
+    // flex flex-col: 자식 요소(MessageItem)를 수직으로 쌓음 
+    // gap-y-2: 말풍선 간 간격 
+    // overflow-x-hidden : 채팅 입력시 애니메이션으로 인한 가로스크롤 나타나는 현상 숨기기
+    <div className="message-list p-4 flex flex-col gap-y-2 overflow-x-hidden">
+      {/* TypeScript가 'msg'의 타입을 'Message'로 올바르게 자동 추론합니다. */}
+      {messages.map((msg, index) => {
+        const prevMsg = messages[index - 1];
+
+        const showDateSeparator = !prevMsg || !isSameDay(new Date(prevMsg.timestamp), new Date(msg.timestamp));
+
+        return (
+          <Fragment key={msg.id}>
+            {showDateSeparator && (
+              <div className="relative my-4">
+                <hr className="border-t border-gray-200" />
+                <span className="absolute left-1/2 -translate-x-1/2 -top-3 bg-chat-bg px-2 text-xs text-gray-500">
+                  {format(new Date(msg.timestamp), 'yyyy년 M월 d일')}
+                </span>
+              </div>
+            )}
+            <MessageItem message={msg} />
+          </Fragment>
+        );
+      })}
       <div ref={messagesEndRef} />
     </div>
   );

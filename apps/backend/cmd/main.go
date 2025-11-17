@@ -10,9 +10,14 @@ import (
 )
 
 func main() {
-	err := godotenv.Load("./.env")
+	// [수정] .env 파일 로드를 시도하되, 파일이 없어도 에러를 발생시키지 않습니다.
+	// godotenv.Load()는 파일이 없을 경우 조용히 무시하고 넘어갑니다.
+	// 이를 통해 로컬 개발 환경에서는 .env 파일을 사용하고,
+	// 컨테이너 환경(파일이 없는)에서는 환경 변수를 직접 사용하게 됩니다.
+	err := godotenv.Load() // 경로를 명시하지 않으면 현재 디렉토리에서 .env를 찾습니다.
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		// .env 파일이 없는 것은 에러가 아니므로, 경고 메시지만 출력합니다.
+		log.Println("Warning: .env file not found, reading from environment variables")
 	}
 
 	hub := internal.NewHub()

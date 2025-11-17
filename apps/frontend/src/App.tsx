@@ -1,8 +1,9 @@
-import { useEffect } from 'react'; // useEffect 임포트
+import { useEffect } from 'react';
 import useChatStore from './store/chatStore';
 import NicknameModal from './components/NicknameModal';
 import ChatRoom from './components/ChatRoom';
-import './App.css';
+import Layout from './components/Layout'; // Layout 컴포넌트 임포트
+import './App.css'; // App.css는 이제 거의 필요 없지만 일단 둡니다.
 
 function App() {
   const { isAuthenticated, login } = useChatStore();
@@ -10,15 +11,15 @@ function App() {
   useEffect(() => {
     const token = localStorage.getItem('sessionToken');
     if (token) {
-      // localStorage에 토큰이 있으면, login 액션에 토큰을 전달하여 상태를 복원
       login(token);
     }
-  }, [login]); // login 함수는 한번만 생성되므로 의존성 배열에 추가해도 안전합니다.
+  }, [login]);
 
   return (
-    <div className="App">
+    // Layout 컴포넌트로 전체를 감쌉니다.
+    <Layout>
       {isAuthenticated ? <ChatRoom /> : <NicknameModal />}
-    </div>
+    </Layout>
   );
 }
 

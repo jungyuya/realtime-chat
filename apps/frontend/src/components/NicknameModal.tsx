@@ -18,7 +18,7 @@ const NicknameModal = () => {
         localStorage.setItem('anonymousId', anonymousId);
       }
 
-      const response = await fetch('http://localhost:8080/api/session', {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // 이제 body에는 anonymousId만 보냅니다.
@@ -31,7 +31,7 @@ const NicknameModal = () => {
 
       const { token } = await response.json();
       localStorage.setItem('sessionToken', token);
-      
+
       // 스토어의 login 액션에 토큰을 전달합니다.
       // 이 부분은 이전 단계에서 이미 수정되었습니다.
       login(token);
