@@ -25,7 +25,7 @@ kind: Service
 metadata:
   name: frontend-service
 spec:
-  type: LoadBalancer # 외부 접속용 공인 IP 할당
+  type: LoadBalancer # 외부 접속용 공인 IP 할당 
   selector:
     app: frontend
   ports:
