@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import useChatStore from '../store/chatStore';
+import { v4 as uuidv4 } from 'uuid'; 
 
 
 const NicknameModal = () => {
   const { login } = useChatStore();
   const [isLoading, setIsLoading] = useState(false);
 
-  // 이제 버튼 클릭 이벤트 핸들러가 됩니다.
   const handleEnter = async () => {
     if (isLoading) return;
     setIsLoading(true);
@@ -14,7 +14,9 @@ const NicknameModal = () => {
     try {
       let anonymousId = localStorage.getItem('anonymousId');
       if (!anonymousId) {
-        anonymousId = crypto.randomUUID();
+        // [수정] crypto.randomUUID() -> uuidv4() 로 변경
+        // HTTP 환경에서도 안전하게 UUID를 생성합니다.
+        anonymousId = uuidv4();
         localStorage.setItem('anonymousId', anonymousId);
       }
 
