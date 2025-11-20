@@ -17,7 +17,7 @@ resource "google_compute_subnetwork" "subnet" {
   network       = google_compute_network.vpc_network.id
   # 이 서브넷이 사용할 IP 주소 범위를 지정합니다. (사설 IP 대역)
   ip_cidr_range = "10.10.10.0/24"
-  region        = "var.gcp_region"
+  region        = var.gcp_region
 }
 
 # ------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ resource "google_compute_firewall" "allow_http_https_ssh" {
   allow {
     protocol = "tcp"
     ports    = ["22", "80", "443"] # SSH, HTTP, HTTPS
-  }.
+  }
   source_ranges = ["0.0.0.0/0"]
 }
 

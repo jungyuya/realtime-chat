@@ -8,3 +8,12 @@ provider "google" {
   zone    = var.gcp_zone
 }
 
+# ------------------------------------------------------------------------------
+# Artifact Registry (Docker 이미지 저장소)
+# ------------------------------------------------------------------------------
+resource "google_artifact_registry_repository" "docker_repo" {
+  repository_id = "realtime-chat-repo"
+  location      = var.gcp_region
+  format        = "DOCKER"
+  description   = "Docker repository for realtime-chat project"
+}

@@ -37,11 +37,10 @@ var profiles = []Profile{
 	{Noun: "수달", AvatarKey: "avatar-15"},
 	{Noun: "다람쥐", AvatarKey: "avatar-16"},
 
-	// 추가 아바타와 이미지에 맞춰 계속 추가할 예정.
+
 }
 
 // SessionRequest는 닉네임을 받지 않습니다.
-// SessionRequest 구조체 수정
 type SessionRequest struct {
 	AnonymousID string `json:"anonymousId" binding:"required"`
 }
