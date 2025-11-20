@@ -1,0 +1,61 @@
+name: CI - Build and Push Docker Images
+
+on:
+  push:
+    branches: [ "main" ] 
+  pull_request:
+    branches: [ "main" ] 
+
+# 공통으로 사용할 변수들
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: asia-northeast3 
+  REPO_NAME: realtime-chat-repo 
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest 
+
+    steps:
+      # 1. 소스 코드 체크아웃 (내려받기)
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Google Cloud 인증 (Service Account Key 사용)
+      - name: Google Auth
+        id: auth
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+      # 3. Docker가 GCP Artifact Registry와 통신하도록 설정
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+
+      # 4. 백엔드 이미지 빌드 및 푸시
+      - name: Build and Push Backend
+        # 작업 디렉토리를 백엔드 폴더로 이동하지 않고, 루트에서 빌드 컨텍스트를 지정합니다.
+        # -f: Dockerfile 경로, .: 빌드 컨텍스트(루트)
+        run: |
+          IMAGE_URI=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/backend
+          
+          docker build -t $IMAGE_URI:${{ github.sha }} -t $IMAGE_URI:latest -f apps/backend/Dockerfile .
+          docker push $IMAGE_URI:${{ github.sha }}
+          docker push $IMAGE_URI:latest
+
+      # 5. 프론트엔드 이미지 빌드 및 푸시
+      - name: Build and Push Frontend
+        # 프론트엔드는 빌드 시 환경 변수(VITE_API_BASE_URL)가 필요합니다.
+        # 지금은 임시로 localhost를 넣거나, 나중에 실제 도메인으로 교체해야 합니다.
+        run: |
+          IMAGE_URI=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/frontend
+          
+          docker build \
+            --build-arg VITE_API_BASE_URL=http://localhost:8080 \
+            -t $IMAGE_URI:${{ github.sha }} \
+            -t $IMAGE_URI:latest \
+            -f apps/frontend/Dockerfile .
+          
+          docker push $IMAGE_URI:${{ github.sha }}
+          docker push $IMAGE_URI:latest
