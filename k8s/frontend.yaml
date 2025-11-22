@@ -19,13 +19,12 @@ spec:
         ports:
         - containerPort: 80
 ---
-# 2. Service: 프론트엔드를 외부로 노출합니다.
 apiVersion: v1
 kind: Service
 metadata:
   name: frontend-service
 spec:
-  type: LoadBalancer # 외부 접속용 공인 IP 할당 
+  type: NodePort # [수정] LoadBalancer -> NodePort
   selector:
     app: frontend
   ports:

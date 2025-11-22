@@ -1,0 +1,7 @@
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: chat-ssl-certificate
+spec:
+  domains:
+    - chat.jungyu.store
