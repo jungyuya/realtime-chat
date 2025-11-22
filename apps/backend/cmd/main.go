@@ -35,12 +35,14 @@ func main() {
 
 	// CORS 미들웨어 설정을 더 유연하게 변경합니다.
 	config := cors.DefaultConfig()
-	// config.AllowOrigins = []string{"http://localhost:5173"} // 특정 Origin만 허용하는 대신,
-	config.AllowAllOrigins = true // 모든 Origin을 허용합니다. (개발 환경에서 유용)
-	// 추가적으로 허용할 헤더를 명시할 수 있습니다.
-	config.AllowHeaders = append(config.AllowHeaders, "Authorization")
-	// OPTIONS 메소드를 명시적으로 허용합니다.
-	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+    config.AllowOrigins = []string{
+        "https://chat.jungyu.store", 
+        "http://localhost:5173", 
+    }
+    config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+    config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
+    
+    router.Use(cors.New(config))
 
 	router.Use(cors.New(config))
 
