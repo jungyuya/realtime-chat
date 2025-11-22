@@ -15,19 +15,43 @@ spec:
     spec:
       containers:
       - name: backend
-        image: asia-northeast3-docker.pkg.dev/realtime-chat-project-478509/realtime-chat-repo/backend:latest
+        image: asia-northeast3-docker.pkg.dev/[YOUR_PROJECT_ID]/realtime-chat-repo/backend:latest
         ports:
         - containerPort: 8080
         env:
-        # 컨테이너 내부에서 사용할 환경 변수 (DB 접속 정보 등은 나중에 Secret으로 뺄 예정)
         - name: GIN_MODE
           value: release
-        # [임시 추가] Kubernetes Secret에서 SECRET_KEY를 가져와 환경 변수로 주입
         - name: SECRET_KEY
           valueFrom:
             secretKeyRef:
-              name: backend-secrets 
-              key: SECRET_KEY         
+              name: backend-secrets
+              key: SECRET_KEY
+        # [추가] DB 접속 정보 주입
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: DB_PORT
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: DB_PASSWORD
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: DB_NAME       
 ---
 apiVersion: v1
 kind: Service
