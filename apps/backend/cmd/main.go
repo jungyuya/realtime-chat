@@ -2,9 +2,10 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 
-	"github.com/gin-contrib/cors" // CORS 미들웨어 임포트 추가
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/jungyuya/realtime-chat/backend/internal"
@@ -12,49 +13,59 @@ import (
 )
 
 func main() {
+	// 1. 환경 변수 로드
+	// 로컬 개발 환경에서는 .env 파일을 읽고,
+	// 컨테이너/클라우드 환경에서는 시스템 환경 변수를 사용합니다.
 	err := godotenv.Load()
 	if err != nil {
 		log.Println("Warning: .env file not found, reading from environment variables")
 	}
 
-	// [추가] 데이터베이스 초기화 (연결 및 테이블 생성)
-	// 주의: 로컬 개발 시 .env에 DB 정보가 없으면 여기서 에러가 나고 서버가 꺼질 수 있습니다.
-	// DB 연결 정보가 있을 때만 실행하도록 조건문을 걸거나,
-	// 로컬 테스트를 위해 .env에 DB 정보를 채워야 합니다. (Step 4.2에서 진행 예정)
-	// 일단은 코드를 추가해둡니다.
+	// 2. 데이터베이스 초기화
+	// DB_HOST 환경 변수가 있을 때만 DB 연결을 시도합니다.
 	if os.Getenv("DB_HOST") != "" {
 		db.InitDB()
 	} else {
 		log.Println("DB_HOST not set, skipping database initialization")
 	}
 
+	// 3. WebSocket Hub 초기화 및 실행
 	hub := internal.NewHub()
 	go hub.Run()
 
+	// 4. Gin 라우터 설정
 	router := gin.Default()
 
-	// CORS 미들웨어 설정을 더 유연하게 변경합니다.
+	// 5. CORS 설정
+	// 프론트엔드 도메인과 로컬 개발 주소를 허용합니다.
 	config := cors.DefaultConfig()
-    config.AllowOrigins = []string{
-        "https://chat.jungyu.store", 
-        "http://localhost:5173", 
-    }
-    config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-    config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
-    
-    router.Use(cors.New(config))
+	config.AllowOrigins = []string{
+		"https://chat.jungyu.store", // 실제 서비스 도메인
+		"http://localhost:5173",     // 로컬 개발 환경
+	}
+	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
 
 	router.Use(cors.New(config))
 
-	// ... 나머지 코드 (api group, ws route, router.Run) ...
+	// 6. [중요] GKE Ingress 헬스 체크용 루트 경로 핸들러
+	// 로드밸런서가 서비스 상태를 확인할 때 이 경로로 요청을 보냅니다.
+	// 200 OK를 반환해야 502 Bad Gateway 에러가 발생하지 않습니다.
+	router.GET("/", func(c *gin.Context) {
+		c.String(http.StatusOK, "Health Check OK")
+	})
+
+	// 7. API 라우트 설정
 	api := router.Group("/api")
 	{
 		api.POST("/session", internal.CreateSessionHandler)
 	}
 
+	// 8. WebSocket 라우트 설정
 	router.GET("/ws", func(c *gin.Context) {
 		internal.ServeWs(hub, c)
 	})
 
+	// 9. 서버 실행
 	router.Run(":8080")
 }
