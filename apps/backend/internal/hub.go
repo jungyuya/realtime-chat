@@ -15,13 +15,24 @@ import (
 	"golang.org/x/time/rate"
 )
 
+const (
+	// 클라이언트에게 Ping을 보내는 주기 (반드시 pongWait보다 짧아야 함)
+	pingPeriod = 50 * time.Second
+
+	// Pong 응답을 기다리는 최대 시간
+	pongWait = 60 * time.Second
+
+	// 메시지 쓰기 제한 시간
+	writeWait = 10 * time.Second
+)
+
 // Message는 클라이언트와 Hub 간에 전달되는 메시지의 구조를 정의합니다.
 type Message struct {
 	Content        string    `json:"content"`
 	SenderID       string    `json:"senderId"`
 	SenderNickname string    `json:"senderNickname"`
 	Avatar         string    `json:"avatar"`
-	Timestamp      time.Time `json:"timestamp"` // 타입을 time.Time으로 변경
+	Timestamp      time.Time `json:"timestamp"`
 }
 
 // Client는 Hub와 WebSocket 연결 사이의 중개자 역할을 합니다.
@@ -128,7 +139,7 @@ func ServeWs(hub *Hub, c *gin.Context) {
 
 	anonymousId, okId := claims["anonymousId"].(string)
 	nickname, okNickname := claims["nickname"].(string)
-	if !okId || !okNickname { // avatar에 대한 검사는 일단 제거
+	if !okId || !okNickname {
 		log.Println("Invalid claims data type for id or nickname")
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
@@ -137,7 +148,7 @@ func ServeWs(hub *Hub, c *gin.Context) {
 	// avatar 클레임은 선택적으로 처리
 	avatar, okAvatar := claims["avatar"].(string)
 	if !okAvatar {
-		avatar = "avatar-1" // 토큰에 avatar 정보가 없으면, 기본값으로 avatar-1을 사용
+		avatar = "avatar-1"
 	}
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
@@ -168,6 +179,16 @@ func (c *Client) readPump() {
 		c.hub.unregister <- c
 		c.conn.Close()
 	}()
+
+	// [수정] Heartbeat 설정: 읽기 제한 시간 및 Pong 핸들러 설정
+	c.conn.SetReadLimit(512) // 메시지 최대 크기 제한 (선택 사항)
+	c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.conn.SetPongHandler(func(string) error {
+		// Pong을 받으면 제한 시간을 다시 늘려줌 (연결 유지)
+		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
 	for {
 		_, content, err := c.conn.ReadMessage()
 		if err != nil {
@@ -193,16 +214,38 @@ func (c *Client) readPump() {
 	}
 }
 
-// writePump는 Hub로부터 메시지를 받아 WebSocket 연결로 전송합니다.
+// writePump는 Hub로부터 메시지를 받아 WebSocket 연결로 전송하고, 주기적으로 Ping을 보냅니다.
 func (c *Client) writePump() {
+	// [수정] 주기적으로 신호를 보내는 Ticker 생성
+	ticker := time.NewTicker(pingPeriod)
 	defer func() {
+		ticker.Stop()
 		c.conn.Close()
 	}()
-	for message := range c.send {
-		if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
-			log.Printf("error writing message: %v", err)
-			break
+
+	for {
+		select {
+		case message, ok := <-c.send:
+			// [수정] 쓰기 제한 시간 설정
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if !ok {
+				// Hub가 채널을 닫으면 연결 종료 메시지 전송
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			// 메시지 전송
+			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
+				log.Printf("error writing message: %v", err)
+				return
+			}
+
+		// [추가] Ticker가 울릴 때마다 Ping 메시지 전송
+		case <-ticker.C:
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
 		}
 	}
-	log.Println("writePump finished for a client")
 }
