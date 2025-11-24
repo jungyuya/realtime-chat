@@ -69,7 +69,14 @@ func (h *Hub) Run() {
 			h.clients[client] = true
 			log.Printf("Client registered: %s (%s). Total: %d", client.Nickname, client.AnonymousID, len(h.clients))
 
+			// [디버깅 로그 추가] DB 조회 시작 알림
+			log.Println("DEBUG: Start fetching recent messages from DB...")
+
 			recentMessages, err := db.GetRecentMessages("global", 50)
+
+			// [디버깅 로그 추가] DB 조회 결과 알림
+			log.Printf("DEBUG: Finished fetching. Error: %v, Count: %d", err, len(recentMessages))
+
 			if err != nil {
 				log.Printf("Failed to fetch recent messages for %s: %v", client.Nickname, err)
 			} else {

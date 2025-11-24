@@ -24,6 +24,10 @@ func InitDB() {
 		os.Getenv("DB_NAME"),
 	)
 
+	// [디버깅 로그 추가] 비밀번호는 제외하고 연결 정보 출력
+	log.Printf("DEBUG: Connecting to DB at %s:%s, DB: %s, User: %s",
+		os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_NAME"), os.Getenv("DB_USER"))
+
 	// Connection Pool 설정을 생성합니다.
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
