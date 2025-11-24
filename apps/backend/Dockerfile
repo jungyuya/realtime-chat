@@ -24,8 +24,6 @@ WORKDIR /app
 
 COPY --from=builder /app/server .
 
-# ca-certificates는 외부 HTTPS 통신 시 필요할 수 있으므로,
-# 안정성을 위해 일단 포함하는 것이 좋습니다.
 RUN apk --no-cache add ca-certificates
 
 EXPOSE 8080

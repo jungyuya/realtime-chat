@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: asia-northeast3-docker.pkg.dev/[YOUR_PROJECT_ID]/realtime-chat-repo/backend:latest
+        image: asia-northeast3-docker.pkg.dev/realtime-chat-project-478509/realtime-chat-repo/backend:latest
         ports:
         - containerPort: 8080
         env:

@@ -8,7 +8,7 @@ export interface RawMessage {
 }
 
 // 프론트엔드에서 UI 렌더링을 위해 가공된 메시지 형태
-export interface Message { // RawMessage를 확장하지 않고, 필요한 속성만 정의
+export interface Message { 
   id: number;
   content: string;
   senderNickname: string;

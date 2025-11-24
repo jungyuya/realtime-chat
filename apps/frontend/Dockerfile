@@ -27,7 +27,6 @@ ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 # 빌드 실행
 RUN pnpm --filter frontend build
 
-
 # =========================================
 # 2단계: 최종(Final) 스테이지
 # =========================================
@@ -38,4 +37,4 @@ COPY --from=builder /app/apps/frontend/dist /usr/share/nginx/html
 COPY apps/frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["nginx", "-g", "daemon off;"] 
