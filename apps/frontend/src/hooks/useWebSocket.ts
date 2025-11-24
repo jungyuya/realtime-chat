@@ -8,7 +8,7 @@ export const useWebSocket = () => {
   const { addMessage, anonymousId } = useChatStore();
   const ws = useRef<WebSocket | null>(null);
   // 재연결 타이머를 저장할 ref
-  const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // [수정] connect 함수를 useEffect 밖으로 빼고 useCallback으로 감쌉니다.
   // 이렇게 하면 재귀적으로 호출하거나 외부에서 호출하기 용이합니다.
