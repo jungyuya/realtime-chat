@@ -33,41 +33,25 @@ const useChatStore = create<ChatState & ChatActions>((set) => ({
   // addMessage 액션 수정: RawMessage를 받아 가공하도록 변경
   addMessage: (rawMessage, currentUserAnonymousId) =>
     set((state) => {
+      // [수정] 중복 메시지 방지 로직 (ID 기반)
+      // 이미 스토어에 같은 ID를 가진 메시지가 있다면 추가하지 않고 무시합니다.
+      // (서버가 재연결 시 최근 메시지를 다시 보내줄 때 중복을 막기 위함)
+      // rawMessage에 id가 없다면(실시간 메시지) Date.now()로 임시 ID를 쓰지만,
+      // DB에서 온 메시지는 고유 ID가 있으므로 그것을 기준으로 합니다.
+
+      // DB 메시지인 경우(id가 있음) 중복 체크
+      if (rawMessage.id && state.messages.some((m) => m.id === rawMessage.id)) {
+        return state;
+      }
+
       const newMessage: Message = {
-        id: Date.now(),
+        id: rawMessage.id || Date.now(), // DB ID가 있으면 쓰고, 없으면 임시 ID
         content: rawMessage.content,
         senderNickname: rawMessage.senderNickname,
         avatar: rawMessage.avatar,
         timestamp: rawMessage.timestamp,
         isMe: rawMessage.senderId === currentUserAnonymousId,
       };
-
-      // =================================================================
-      // [검증 2] 빈 말풍선 문제의 원인 찾기 (Zustand Store)
-      // =================================================================
-      console.group("Zustand addMessage Action");
-      console.log("Raw message received by action:", rawMessage);
-      console.log("Current user ID for comparison:", currentUserAnonymousId);
-      console.log("Is this message from me?:", newMessage.isMe);
-      console.log("Final message object to be added to state:", newMessage);
-      console.groupEnd();
-      // =================================================================
-
-      // [중복 방지 로직]
-      // 만약 이 메시지가 내가 보낸 것이고 (isMe: true),
-      // 낙관적 업데이트로 인해 이미 스토어에 비슷한 메시지가 있다면 추가하지 않음
-      // (간단한 중복 방지: 내용과 isMe 여부가 같은 최근 메시지가 있으면 무시)
-      const lastMessage = state.messages[state.messages.length - 1];
-      if (
-        newMessage.isMe &&
-        lastMessage &&
-        lastMessage.isMe &&
-        lastMessage.content === newMessage.content
-      ) {
-        // 이미 낙관적 업데이트로 추가된 메시지로 보이므로, 서버로부터 온 것은 무시
-        console.log("Duplicate message detected, ignoring server echo.");
-        return state; // 상태 변경 없음
-      }
 
       return { messages: [...state.messages, newMessage] };
     }),

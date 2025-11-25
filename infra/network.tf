@@ -56,7 +56,6 @@ resource "google_compute_firewall" "allow_internal_gke" {
   }
 
   # [수정됨] source_ranges를 10.0.0.0/8로 확장했습니다.
-  # 기존: [google_compute_subnetwork.subnet.ip_cidr_range] (10.10.10.0/24 만 허용)
   # 변경: ["10.0.0.0/8"] (10.x.x.x 대역 전체 허용)
   # 이유: GKE 파드(Pod)는 노드 IP 대역(10.10.10.x)이 아닌 별도의 사설 대역(예: 10.128.x.x)을 사용하기 때문입니다.
   source_ranges = ["10.0.0.0/8"]

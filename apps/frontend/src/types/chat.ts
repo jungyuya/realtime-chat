@@ -5,6 +5,7 @@ export interface RawMessage {
   senderNickname: string;
   avatar: string;
   timestamp: string;
+  id?: number
 }
 
 // 프론트엔드에서 UI 렌더링을 위해 가공된 메시지 형태
