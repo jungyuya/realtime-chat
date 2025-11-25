@@ -1,0 +1,11 @@
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: backend-config
+spec:
+  # 연결 타임아웃을 3600초(1시간)로 설정합니다.
+  # WebSocket 연결이 이 시간 동안 유지될 수 있게 합니다.
+  timeoutSec: 3600
+  # (선택 사항) 연결 드레이닝 시간 설정
+  connectionDraining:
+    drainingTimeoutSec: 60
