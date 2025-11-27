@@ -42,6 +42,7 @@ func main() {
 	config.AllowOrigins = []string{
 		"https://chat.jungyu.store", // 실제 서비스 도메인
 		"http://localhost:5173",     // 로컬 개발 환경
+		"http://127.0.0.1:5173",
 	}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
