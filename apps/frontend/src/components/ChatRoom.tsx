@@ -15,7 +15,7 @@ const ChatRoom = () => {
       <Header />
       
       {/* 메시지 목록 영역 */}
-      <div className="flex-grow overflow-y-auto scrollbar-hide"> {/* scrollbar-hide는 선택사항 */}
+      <div className="flex-grow overflow-y-auto scrollbar-hide"> 
         <MessageList />
       </div>
       
