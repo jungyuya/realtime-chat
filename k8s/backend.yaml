@@ -5,6 +5,7 @@ metadata:
   name: backend
 spec:
   replicas: 1 # 파드(Pod) 개수 (일단 1개로 시작)
+  revisionHistoryLimit: 2
   selector:
     matchLabels:
       app: backend
