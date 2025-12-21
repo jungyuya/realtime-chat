@@ -1,69 +1,74 @@
-# ------------------------------------------------------------------------------
-# Compute Engine VM 인스턴스 (DB 서버용)
-# ------------------------------------------------------------------------------
-resource "google_compute_instance" "db_server" {
-  name         = "db-server"
-  machine_type = "e2-micro"
-  zone         = var.gcp_zone
+resource "google_compute_instance" "app_server" {
+  name                      = "realtime-chat-server"
+  machine_type              = "e2-micro"
+  zone                      = var.gcp_zone
+  allow_stopping_for_update = true
 
+  # 부팅 디스크 설정
   boot_disk {
     initialize_params {
-      image = "debian-cloud/debian-11"
+      image = "ubuntu-os-cloud/ubuntu-2204-lts" # Ubuntu 22.04 LTS
+      size  = 30
+      type  = "pd-standard"
     }
   }
 
+  # 네트워크 설정
   network_interface {
     network    = google_compute_network.vpc_network.id
     subnetwork = google_compute_subnetwork.subnet.id
     access_config {
-      // Ephemeral public IP
+      # 예약한 고정 IP 연결
+      nat_ip = google_compute_address.vm_static_ip.address
     }
   }
+  # VM에 기본 서비스 계정을 연결합니다.
+  service_account {
+    # email을 지정하지 않거나 "default"로 설정하면 프로젝트의 기본 Compute Engine 서비스 계정을 사용합니다.
+    email  = ""
+    scopes = ["cloud-platform"] # 모든 GCP API에 접근 가능한 범위를 부여 (실제 권한은 IAM으로 제어)
+  }
 
+  # 태그 설정
   tags = ["http-server", "https-server"]
 
-  # VM이 시작될 때 실행할 자동화 스크립트
+  # [핵심] 자동화 스크립트
   metadata_startup_script = <<-EOF
     #! /bin/bash
-    
-    # 1. 로그 파일 설정 (디버깅용)
     exec > /var/log/startup-script.log 2>&1
     echo "Start setup..."
 
-    # 2. Docker 설치 (공식 문서 기준)
-    sudo apt-get update
-    sudo apt-get install -y ca-certificates curl gnupg
-    sudo install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    sudo chmod a+r /etc/apt/keyrings/docker.gpg
-
-    echo \
-      "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
-      "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
-      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-    sudo apt-get update
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-    # 3. PostgreSQL 컨테이너 실행
-    # 이미 실행 중인지 확인하고, 없으면 실행합니다 (재시작 시 중복 방지)
-    if [ ! "$(sudo docker ps -q -f name=postgres-db)" ]; then
-        if [ "$(sudo docker ps -aq -f name=postgres-db)" ]; then
-            # 컨테이너가 중지된 상태라면 재시작
-            sudo docker start postgres-db
-        else
-            # 컨테이너가 아예 없으면 새로 생성 및 실행
-            sudo docker run -d \
-              --name postgres-db \
-              -p 5432:5432 \
-              -e POSTGRES_USER=postgres \
-              -e POSTGRES_PASSWORD=mysecretpassword \
-              -e POSTGRES_DB=chatdb \
-              -v postgres-data:/var/lib/postgresql/data \
-              postgres:15-alpine
-        fi
+    # 1. Swap 메모리 설정 (2GB)
+    # 1GB RAM으로는 빌드/배포 시 멈출 수 있으므로 필수입니다.
+    if [ ! -f /swapfile ]; then
+        echo "Creating 2GB swapfile..."
+        fallocate -l 2G /swapfile
+        chmod 600 /swapfile
+        mkswap /swapfile
+        swapon /swapfile
+        echo '/swapfile none swap sw 0 0' >> /etc/fstab
+        echo "Swap created."
+    else
+        echo "Swap already exists."
     fi
 
-    echo "Setup finished successfully!"
+    # 2. Docker 설치
+    if ! command -v docker &> /dev/null; then
+        echo "Installing Docker..."
+        apt-get update
+        apt-get install -y ca-certificates curl gnupg lsb-release
+        mkdir -p /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+          $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+        apt-get update
+        apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+        echo "Docker installed."
+    else
+        echo "Docker already installed."
+    fi
+
+    echo "Setup finished!"
   EOF
 }

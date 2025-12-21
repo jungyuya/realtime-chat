@@ -1,95 +1,90 @@
-name: CI - Build, Push, and Update Manifests
+name: Deploy to Single VM
 
 on:
   push:
     branches: [ "main" ]
-    # [중요] CI가 스스로 유발한 커밋(태그 업데이트)에 의해 무한 루프가 도는 것을 방지하기 위해
-    # k8s 폴더의 변경사항은 트리거에서 제외할 수도 있지만, 
-    # GitHub Actions의 기본 토큰은 재귀적 트리거를 방지하므로 일단 둡니다.
-    paths-ignore:
-      - 'k8s/**' # k8s 폴더만 변경된 경우(즉, 태그 업데이트 커밋)는 빌드 건너뛰기
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: asia-northeast3
+  REGION: us-central1 # 미국 리전 (오와이아)
   REPO_NAME: realtime-chat-repo
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    # [중요] 저장소에 코드를 다시 Push 해야 하므로 쓰기 권한 부여
-    permissions:
-      contents: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 1. Google Cloud 인증
+      # 1. GCP 인증 (JSON Key 방식)
       - name: Google Auth
-        id: auth
         uses: 'google-github-actions/auth@v2'
         with:
           credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
       # 2. Docker 설정
-      - name: Configure Docker for Artifact Registry
+      - name: Configure Docker
         run: |
           gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
-      # 3. Kustomize 설치 (최신 버전)
-      - name: Setup Kustomize
-        run: |
-          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"  | bash
-          sudo mv kustomize /usr/local/bin/
-
-      # 4. 백엔드 빌드 및 푸시 (태그: Commit SHA)
+      # 3. 백엔드 빌드 & 푸시
       - name: Build and Push Backend
         run: |
           IMAGE_URI=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/backend
-          # latest 태그는 편의상 유지하되, 실제 배포에는 SHA 태그를 사용합니다.
-          docker build -t $IMAGE_URI:${{ github.sha }} -t $IMAGE_URI:latest -f apps/backend/Dockerfile .
-          docker push $IMAGE_URI:${{ github.sha }}
+          docker build -t $IMAGE_URI:latest -f apps/backend/Dockerfile .
           docker push $IMAGE_URI:latest
 
-      # 5. 프론트엔드 빌드 및 푸시 (태그: Commit SHA)
+      # 4. 프론트엔드 빌드 & 푸시
       - name: Build and Push Frontend
         run: |
           IMAGE_URI=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/frontend
+          # [중요] 도메인 주소로 환경 변수 주입
           docker build \
             --build-arg VITE_API_BASE_URL=https://chat.jungyu.store \
-            -t $IMAGE_URI:${{ github.sha }} \
             -t $IMAGE_URI:latest \
             -f apps/frontend/Dockerfile .
-          docker push $IMAGE_URI:${{ github.sha }}
           docker push $IMAGE_URI:latest
 
-      # 6. [핵심] Kustomize를 사용하여 이미지 태그 업데이트
-      - name: Update Kubernetes Manifests
-        run: |
-          cd k8s
-          
-          # 백엔드 이미지 태그 변경
-          kustomize edit set image backend-image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/backend:${{ github.sha }}
-          
-          # 프론트엔드 이미지 태그 변경
-          kustomize edit set image frontend-image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/frontend:${{ github.sha }}
-          
-          cd ..
+      # 5. 설정 파일 서버로 전송 (SCP)
+      # docker-compose.prod.yml, nginx 설정, .env.prod 파일을 서버로 복사합니다.
+      - name: Copy files to server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # 소스 파일들
+          source: "docker-compose.prod.yml,nginx/conf.d/default.conf,.env.prod"
+          # 서버의 타겟 디렉토리 (홈 디렉토리 아래 app 폴더)
+          target: "~/app"
+          # 파일 덮어쓰기 허용
+          overwrite: true
 
-      # 7. 변경된 kustomization.yaml을 Git에 커밋 및 푸시
-      - name: Commit and Push Manifest changes
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # k8s 폴더의 변경사항만 스테이징
-          git add k8s/kustomization.yaml
-          
-          # 변경사항이 있을 때만 커밋 (이미지 태그가 같으면 커밋 안 함)
-          if git diff-index --quiet HEAD; then
-            echo "No changes to commit"
-          else
-            git commit -m "ci: update image tags to ${{ github.sha }}"
-            git push origin main
-          fi
+      # 6. 서버에서 배포 명령어 실행 (SSH)
+      - name: Deploy on Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # 1. 작업 디렉토리로 이동
+            cd ~/app
+            
+            # 2. GCP Artifact Registry 로그인을 위해 gcloud credential helper 설정 (필요시)
+            # VM은 기본적으로 Service Account 권한이 있으면 pull 가능하지만,
+            # 확실하게 하기 위해 docker login을 하거나, VM 권한을 믿습니다.
+            # 여기서는 VM에 Artifact Registry Reader 권한이 있다고 가정하고 진행합니다.
+            # (만약 권한 에러 나면 `gcloud auth configure-docker ...` 추가 필요)
+            gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+            # 3. 최신 이미지 당겨오기
+            # docker-compose.prod.yml 안에 이미지 주소가 있으므로 pull 가능
+            sudo docker compose -f docker-compose.prod.yml pull
+
+            # 4. 컨테이너 재시작 (변경된 것만)
+            sudo docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            
+            # 5. 불필요한 이미지 정리
+            sudo docker image prune -f
