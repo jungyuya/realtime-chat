@@ -6,7 +6,7 @@ on:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: us-central1 # 미국 리전 (오와이아)
+  REGION: us-central1 # 미국 (오와이아)
   REPO_NAME: realtime-chat-repo
 
 jobs:
@@ -46,17 +46,21 @@ jobs:
             -f apps/frontend/Dockerfile .
           docker push $IMAGE_URI:latest
 
-      # 5. 설정 파일 서버로 전송 (SCP)
-      # docker-compose.prod.yml, nginx 설정, .env.prod 파일을 서버로 복사합니다.
+      # 5. 설정 파일 생성 및 전송 (SCP)
+      # .env.prod는 보안상 Git에 없으므로, Secrets에서 값을 가져와 런너에서 생성한 뒤 전송합니다.
+      - name: Make envfile
+        run: |
+          echo "${{ secrets.ENV_PROD }}" > .env.prod
+
       - name: Copy files to server
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          # 소스 파일들
+          # 전송할 파일 목록: docker-compose 파일, nginx 설정, 방금 만든 .env.prod
           source: "docker-compose.prod.yml,nginx/conf.d/default.conf,.env.prod"
-          # 서버의 타겟 디렉토리 (홈 디렉토리 아래 app 폴더)
+          # 서버의 타겟 디렉토리
           target: "~/app"
           # 파일 덮어쓰기 허용
           overwrite: true
@@ -69,22 +73,18 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            # 1. 작업 디렉토리로 이동
+            # 작업 디렉토리로 이동
             cd ~/app
             
-            # 2. GCP Artifact Registry 로그인을 위해 gcloud credential helper 설정 (필요시)
-            # VM은 기본적으로 Service Account 권한이 있으면 pull 가능하지만,
-            # 확실하게 하기 위해 docker login을 하거나, VM 권한을 믿습니다.
-            # 여기서는 VM에 Artifact Registry Reader 권한이 있다고 가정하고 진행합니다.
-            # (만약 권한 에러 나면 `gcloud auth configure-docker ...` 추가 필요)
+            # GCP Artifact Registry 로그인을 위해 gcloud credential helper 설정
+            # (VM에 서비스 계정이 연결되어 있어도 명시적 설정이 안전함)
             gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
-            # 3. 최신 이미지 당겨오기
-            # docker-compose.prod.yml 안에 이미지 주소가 있으므로 pull 가능
+            # 최신 이미지 당겨오기
             sudo docker compose -f docker-compose.prod.yml pull
 
-            # 4. 컨테이너 재시작 (변경된 것만)
+            # 컨테이너 실행 (변경된 것만 재시작)
             sudo docker compose -f docker-compose.prod.yml up -d --remove-orphans
             
-            # 5. 불필요한 이미지 정리
+            # 불필요한 이미지 정리 (공간 확보)
             sudo docker image prune -f
