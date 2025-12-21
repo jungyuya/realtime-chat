@@ -78,7 +78,7 @@ jobs:
             
             # GCP Artifact Registry 로그인을 위해 gcloud credential helper 설정
             # (VM에 서비스 계정이 연결되어 있어도 명시적 설정이 안전함)
-            gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+            sudo gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
             # 최신 이미지 당겨오기
             sudo docker compose -f docker-compose.prod.yml pull
