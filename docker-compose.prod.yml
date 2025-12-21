@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # 1. Nginx (웹 서버 & 리버스 프록시 & SSL Termination)
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: nginx
+    ports:
+      - "80:80"   # HTTP
+      - "443:443" # HTTPS
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d  # Nginx 설정 파일 마운트
+      - ./certbot/conf:/etc/letsencrypt   # SSL 인증서 저장소 마운트
+      - ./certbot/www:/var/www/certbot    # Let's Encrypt 인증용 챌린지 파일
+    depends_on:
+      - frontend
+      - backend
+    restart: always
+
+  # 2. Certbot (SSL 인증서 자동 발급 및 갱신 봇)
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    # 12시간마다 인증서 갱신을 시도하는 스크립트 실행
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+  # 3. Backend (Go API Server)
+  backend:
+    image: us-central1-docker.pkg.dev/realtime-chat-project-478509/realtime-chat-repo/backend:latest
+    container_name: backend
+    env_file:
+      - .env.prod # 운영용 환경 변수
+    restart: always
+
+  # 4. Frontend (React + Nginx Server)
+  frontend:
+    image: us-central1-docker.pkg.dev/realtime-chat-project-478509/realtime-chat-repo/frontend:latest
+    container_name: frontend
+    restart: always
+
+  # 5. Database (PostgreSQL)
+  db:
+    image: postgres:15-alpine
+    container_name: db
+    volumes:
+      - postgres-data:/var/lib/postgresql/data # 데이터 영구 저장
+    env_file:
+      - .env.prod
+    restart: always
+
+# 데이터베이스 볼륨 정의
+volumes:
+  postgres-data:
