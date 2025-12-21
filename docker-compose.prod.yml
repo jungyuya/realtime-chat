@@ -1,17 +1,17 @@
 version: '3.8'
 
 services:
-  # 1. Nginx (웹 서버 & 리버스 프록시 & SSL Termination)
   nginx:
     image: nginx:1.27-alpine
     container_name: nginx
     ports:
-      - "80:80"   # HTTP
-      - "443:443" # HTTPS
+      - "80:80"
+      - "443:443"
     volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d  # Nginx 설정 파일 마운트
-      - ./certbot/conf:/etc/letsencrypt   # SSL 인증서 저장소 마운트
-      - ./certbot/www:/var/www/certbot    # Let's Encrypt 인증용 챌린지 파일
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      # [수정] Certbot 볼륨을 직접 마운트합니다.
+      - certbot-conf:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
     depends_on:
       - frontend
       - backend
@@ -22,9 +22,9 @@ services:
     image: certbot/certbot
     container_name: certbot
     volumes:
-      - ./certbot/conf:/etc/letsencrypt
-      - ./certbot/www:/var/www/certbot
-    # 12시간마다 인증서 갱신을 시도하는 스크립트 실행
+      # [수정] Certbot 볼륨을 직접 마운트합니다.
+      - certbot-conf:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
 
   # 3. Backend (Go API Server)
@@ -57,3 +57,5 @@ services:
 # 데이터베이스 볼륨 정의
 volumes:
   postgres-data:
+  certbot-conf:
+  certbot-www:
