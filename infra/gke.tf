@@ -8,6 +8,8 @@ resource "google_container_cluster" "primary" {
   remove_default_node_pool = true
   initial_node_count       = 1
 
+  deletion_protection = false
+
   # [추가] 기본 노드 풀의 설정을 직접 제어합니다.
   # 이 블록을 추가하면, Terraform이 임시로 생성하는 기본 노드 풀조차도
   # 아래의 설정을 따르게 됩니다.
@@ -41,6 +43,7 @@ resource "google_container_node_pool" "primary_nodes" {
       "https://www.googleapis.com/auth/cloud-platform"
     ]
   }
+
 
   # [추가] 클러스터 리소스가 먼저 생성된 후에 이 노드 풀이 생성되도록
   # 명시적인 의존성을 추가하여 안정성을 높입니다.
