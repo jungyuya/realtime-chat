@@ -1,4 +1,7 @@
+version: '3.8'
+
 services:
+  # 1. Nginx
   nginx:
     image: nginx:1.27-alpine
     container_name: nginx
@@ -7,45 +10,38 @@ services:
       - "443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
-      - certbot-conf:/etc/letsencrypt
-      - certbot-www:/var/www/certbot
+      # [핵심] 호스트의 certbot/conf 폴더를 컨테이너 내부와 공유합니다.
+      - ./certbot/conf:/etc/letsencrypt
     depends_on:
       - frontend
       - backend
     restart: always
 
-  certbot:
-    image: certbot/certbot
-    container_name: certbot
-    volumes:
-      - certbot-conf:/etc/letsencrypt
-      - certbot-www:/var/www/certbot
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
-
+  # 3. Backend
   backend:
     image: us-central1-docker.pkg.dev/realtime-chat-project-478509/realtime-chat-repo/backend:latest
     container_name: backend
-    # [수정] env_file을 직접 참조하도록 변경
-    env_file: .env.prod
+    env_file:
+      - .env.prod
     depends_on:
-      - db # DB가 먼저 켜진 후에 백엔드가 켜지도록 의존성 추가
+      - db
     restart: always
 
+  # 4. Frontend
   frontend:
     image: us-central1-docker.pkg.dev/realtime-chat-project-478509/realtime-chat-repo/frontend:latest
     container_name: frontend
     restart: always
 
+  # 5. Database
   db:
     image: postgres:15-alpine
     container_name: db
     volumes:
       - postgres-data:/var/lib/postgresql/data
-    # [수정] env_file을 직접 참조하도록 변경
-    env_file: .env.prod
+    env_file:
+      - .env.prod
     restart: always
 
 volumes:
   postgres-data:
-  certbot-conf:
-  certbot-www:
