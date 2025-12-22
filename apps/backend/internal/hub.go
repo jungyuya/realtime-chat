@@ -12,20 +12,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
-	"github.com/jungyuya/realtime-chat/backend/internal/db" // [중요] db 패키지 임포트
+	"github.com/jungyuya/realtime-chat/backend/internal/db"
 	"golang.org/x/time/rate"
 )
 
-// [수정] Heartbeat 설정 최적화
 const (
-	// 클라이언트에게 Ping을 보내는 주기 (10초로 단축하여 연결 유지 강화)
 	pingPeriod = 10 * time.Second
-
-	// Pong 응답을 기다리는 최대 시간
-	pongWait = 60 * time.Second
-
-	// 메시지 쓰기 제한 시간
-	writeWait = 10 * time.Second
+	pongWait   = 60 * time.Second
+	writeWait  = 10 * time.Second
 )
 
 type Message struct {
@@ -34,6 +28,7 @@ type Message struct {
 	SenderNickname string    `json:"senderNickname"`
 	Avatar         string    `json:"avatar"`
 	Timestamp      time.Time `json:"timestamp"`
+	RoomID         string    `json:"roomId"` // [추가] 메시지가 속한 방 ID
 }
 
 type Client struct {
@@ -44,10 +39,12 @@ type Client struct {
 	AnonymousID string
 	Nickname    string
 	Avatar      string
+	RoomID      string // [추가] 클라이언트가 현재 접속한 방 ID
 }
 
 type Hub struct {
-	clients    map[*Client]bool
+	// [수정] 방 ID별로 클라이언트 맵을 관리 (RoomID -> Client -> bool)
+	rooms      map[string]map[*Client]bool
 	broadcast  chan *Message
 	register   chan *Client
 	unregister chan *Client
@@ -58,7 +55,7 @@ func NewHub() *Hub {
 		broadcast:  make(chan *Message),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
-		clients:    make(map[*Client]bool),
+		rooms:      make(map[string]map[*Client]bool), // 초기화
 	}
 }
 
@@ -66,21 +63,20 @@ func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.register:
-			h.clients[client] = true
-			log.Printf("Client registered: %s (%s). Total: %d", client.Nickname, client.AnonymousID, len(h.clients))
+			// [수정] 해당 방이 없으면 생성
+			if h.rooms[client.RoomID] == nil {
+				h.rooms[client.RoomID] = make(map[*Client]bool)
+			}
+			// 해당 방에 클라이언트 등록
+			h.rooms[client.RoomID][client] = true
+			
+			log.Printf("Client registered to room [%s]: %s. Total in room: %d", client.RoomID, client.Nickname, len(h.rooms[client.RoomID]))
 
-			// [디버깅 로그 추가] DB 조회 시작 알림
-			log.Println("DEBUG: Start fetching recent messages from DB...")
-
-			recentMessages, err := db.GetRecentMessages("global", 50)
-
-			// [디버깅 로그 추가] DB 조회 결과 알림
-			log.Printf("DEBUG: Finished fetching. Error: %v, Count: %d", err, len(recentMessages))
-
+			// [수정] 해당 방(client.RoomID)의 최근 메시지 불러오기
+			recentMessages, err := db.GetRecentMessages(client.RoomID, 50)
 			if err != nil {
 				log.Printf("Failed to fetch recent messages for %s: %v", client.Nickname, err)
 			} else {
-				// [수정] 루프에 'SendingHistory'라는 이름을 붙입니다.
 			SendingHistory:
 				for _, dbMsg := range recentMessages {
 					msg := &Message{
@@ -89,11 +85,11 @@ func (h *Hub) Run() {
 						SenderNickname: dbMsg.SenderNickname,
 						Avatar:         dbMsg.Avatar,
 						Timestamp:      dbMsg.CreatedAt,
+						RoomID:         dbMsg.RoomID,
 					}
 
 					messageBytes, err := json.Marshal(msg)
 					if err != nil {
-						log.Printf("Failed to marshal recent message: %v", err)
 						continue
 					}
 
@@ -101,24 +97,31 @@ func (h *Hub) Run() {
 					case client.send <- messageBytes:
 					default:
 						close(client.send)
-						delete(h.clients, client)
-						// [수정] 단순히 break가 아니라, 'SendingHistory' 루프를 종료하라고 명시합니다.
+						delete(h.rooms[client.RoomID], client)
 						break SendingHistory
 					}
 				}
 			}
 
 		case client := <-h.unregister:
-			if _, ok := h.clients[client]; ok {
-				delete(h.clients, client)
-				close(client.send)
-				log.Printf("Client unregistered: %s. Total: %d", client.Nickname, len(h.clients))
+			// [수정] 해당 방에서 클라이언트 제거
+			if clients, ok := h.rooms[client.RoomID]; ok {
+				if _, ok := clients[client]; ok {
+					delete(clients, client)
+					close(client.send)
+					
+					// 방이 비었으면 방 자체를 삭제 (메모리 관리)
+					if len(clients) == 0 {
+						delete(h.rooms, client.RoomID)
+					}
+					log.Printf("Client unregistered from room [%s]: %s", client.RoomID, client.Nickname)
+				}
 			}
 
 		case message := <-h.broadcast:
-			// [기존] 메시지를 DB에 저장 (비동기)
+			// [수정] 메시지를 해당 방(message.RoomID)의 DB에 저장
 			go func(msg *Message) {
-				err := db.SaveMessage("global", msg.SenderID, msg.SenderNickname, msg.Avatar, msg.Content)
+				err := db.SaveMessage(msg.RoomID, msg.SenderID, msg.SenderNickname, msg.Avatar, msg.Content)
 				if err != nil {
 					log.Printf("Failed to save message to DB: %v", err)
 				}
@@ -129,12 +132,16 @@ func (h *Hub) Run() {
 				log.Printf("Error marshalling message: %v", err)
 				continue
 			}
-			for client := range h.clients {
-				select {
-				case client.send <- messageBytes:
-				default:
-					close(client.send)
-					delete(h.clients, client)
+
+			// [수정] 해당 방에 있는 클라이언트들에게만 전송
+			if clients, ok := h.rooms[message.RoomID]; ok {
+				for client := range clients {
+					select {
+					case client.send <- messageBytes:
+					default:
+						close(client.send)
+						delete(clients, client)
+					}
 				}
 			}
 		}
@@ -151,6 +158,9 @@ var upgrader = websocket.Upgrader{
 
 func ServeWs(hub *Hub, c *gin.Context) {
 	tokenString := c.Query("token")
+	// [추가] URL 쿼리에서 room 파라미터 추출 (기본값: global)
+	roomID := c.DefaultQuery("room", "global")
+
 	if tokenString == "" {
 		log.Println("Token not found in query")
 		c.AbortWithStatus(http.StatusUnauthorized)
@@ -207,6 +217,7 @@ func ServeWs(hub *Hub, c *gin.Context) {
 		AnonymousID: anonymousId,
 		Nickname:    nickname,
 		Avatar:      avatar,
+		RoomID:      roomID, // [추가] Client에 RoomID 설정
 	}
 	client.hub.register <- client
 
@@ -219,19 +230,17 @@ func (c *Client) readPump() {
 		c.hub.unregister <- c
 		c.conn.Close()
 	}()
-
-	// [수정] Pong 핸들러 및 ReadDeadline 설정
-	c.conn.SetReadLimit(4096) // 메시지 크기 제한을 좀 더 넉넉하게 (4KB)
+	
+	c.conn.SetReadLimit(4096)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.conn.SetPongHandler(func(string) error {
+	c.conn.SetPongHandler(func(string) error { 
 		c.conn.SetReadDeadline(time.Now().Add(pongWait))
-		return nil
+		return nil 
 	})
 
 	for {
 		_, content, err := c.conn.ReadMessage()
 		if err != nil {
-			// [추가] 에러 로그 상세화
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("Client %s disconnected unexpectedly: %v", c.Nickname, err)
 			} else {
@@ -251,11 +260,13 @@ func (c *Client) readPump() {
 			SenderNickname: c.Nickname,
 			Avatar:         c.Avatar,
 			Timestamp:      time.Now(),
+			RoomID:         c.RoomID, // [추가] 메시지에 RoomID 포함
 		}
 		c.hub.broadcast <- msg
 	}
 }
 
+// ... writePump는 변경 없음 ...
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
