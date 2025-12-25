@@ -266,7 +266,6 @@ func (c *Client) readPump() {
 	}
 }
 
-// ... writePump는 변경 없음 ...
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {

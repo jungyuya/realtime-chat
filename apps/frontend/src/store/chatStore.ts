@@ -59,6 +59,19 @@ const useChatStore = create<ChatState & ChatActions>((set) => ({
   login: (token) => {
     try {
       const decoded = jwtDecode<JwtPayload>(token);
+      
+      // [추가] 토큰 만료 시간(exp) 체크
+      // exp는 초 단위, Date.now()는 밀리초 단위이므로 변환 필요
+      const currentTime = Date.now() / 1000;
+      
+      if (decoded.exp < currentTime) {
+        console.warn("Token expired. Logging out.");
+        localStorage.removeItem('sessionToken');
+        localStorage.removeItem('anonymousId');
+        // 상태를 업데이트하지 않고 리턴하여 로그인 실패 처리
+        return; 
+      }
+
       set({
         isAuthenticated: true,
         nickname: decoded.nickname,
@@ -67,6 +80,9 @@ const useChatStore = create<ChatState & ChatActions>((set) => ({
       });
     } catch (error) {
       console.error("Failed to decode token:", error);
+      // 토큰 형식이 잘못된 경우도 삭제
+      localStorage.removeItem('sessionToken');
+      localStorage.removeItem('anonymousId');
     }
   },
 
