@@ -1,182 +1,97 @@
-# realtime-chat
-`Deep Dive!` 블로그 내부에 "실시간 채팅 서비스"를 별도의 MSA 프로젝트로 구현 ( Go + Vite + Terraform + k8s )
+# Realtime Chat Project
+> **"GKE 기반의 MSA 아키텍처에서 비용 최적화를 위해 단일 VM 환경으로 마이그레이션하여 운영 비용 $0를 달성한 실시간 채팅 서비스"**
 
-작성일 : 2025 - 11 - 10 
+## 1. 프로젝트 소개
 
-### **Part 1: 프로젝트 개요 및 아키텍처 원칙**
+본 프로젝트는 초기에 **Google Kubernetes Engine (GKE)** 기반의 고가용성 마이크로서비스 아키텍처로 시작하여, 실제 서비스 규모와 비용 효율성을 고려해 **단일 VM (Docker Compose)** 환경으로 성공적으로 마이그레이션한 엔지니어링 포트폴리오입니다.
 
-#### **1.1. 프로젝트 비전 및 목표**
+Go의 강력한 동시성 처리 모델을 활용하여 고성능 실시간 통신을 구현했으며, 복잡한 클라우드 인프라(K8s, ArgoCD)를 직접 구축하고 운영해본 경험을 바탕으로, 상황에 맞는 **"적정 기술(Appropriate Technology)"** 을 선택하고 전환하는 과정을 담았습니다.
 
-Deep Dive! 블로그의 AWS 서버리스 기반 블로그 플랫폼을 보완하는 독립적인 실시간 채팅 마이크로서비스를 구축하는 것을 목표로 한다. 이 프로젝트는 Docker, Kubernetes, Terraform, Go, Prometheus/Grafana 등 현대적인 클라우드 네이티브 기술 스택에 대한 깊이 있는 학습과 경험 확보를 주목적으로 한다. 최종적으로는 두 개의 독립적인 마이크로서비스(블로그, 채팅)가 서로 다른 클라우드 위에서 운영되면서도, 사용자에게는 하나의 통합된 서비스 경험을 제공하는 고가용성의 멀티 클라우드 애플리케이션 아키텍처의 프로토타입을 완성한다.
-
-#### **1.2. 핵심 아키텍처 설계 원칙**
-
-1.  **마이크로서비스 아키텍처 (MSA)**: 채팅 서비스는 기존 블로그 서비스와 완벽하게 독립된 Git 저장소, 인프라, 배포 파이프라인을 가진다. 두 서비스는 잘 정의된 API(URL 및 `<iframe>`)를 통해서만 통신한다.
-2.  **클라우드 네이티브 (Cloud-Native)**: 애플리케이션은 Docker 컨테이너로 패키징되고, 인프라는 Terraform으로 관리되며, Kubernetes를 통해 동적으로 운영된다.
-3.  **느슨한 결합 (Loose Coupling)**: 블로그와 채팅 서비스의 연동은 `<iframe>`을 통해 이루어져, 기술적 독립성과 배포 자율성을 보장한다.
-4.  **점진적 개발 및 방어적 확장**: 로컬 개발 우선(Local First), 오버 엔지니어링 지양, 프리티어 준수를 원칙으로 한다. 초기 버전은 핵심 기능에 집중하고, 복잡한 기능(예: Redis Pub/Sub, 인증 연동)은 향후 고도화 과제로 남겨둔다.
+- **Period**: 2025.11 - 2025.12 (개인 프로젝트)
+- **Tech Stack**: Go, React, Docker, Terraform, Nginx
 
 ---
 
-### **Part 2: 기술 스택 및 선택 이유**
+## 2. 시스템 아키텍처 변화
 
-| 카테고리 | 선택 기술 | 선택 이유 (The "Why") |
-| :--- | :--- | :--- |
-| **백엔드 언어** | **Go** | 고루틴(Goroutine)을 통한 우수한 동시성 처리 성능으로, 수많은 WebSocket 동시 연결을 적은 리소스로 관리하기에 최적. |
-| **프론트엔드** | **React (Vite)** | 기존 기술 숙련도를 활용하여 개발 속도를 확보하고, 백엔드 신기술 학습에 집중. Vite는 SPA 개발에 가볍고 빠른 개발 경험 제공. |
-| **실시간 통신** | **WebSocket** | HTTP 폴링/롱 폴링 대비, 매우 낮은 지연 시간과 높은 효율성으로 진정한 양방향 실시간 통신을 구현하기 위한 표준 기술. |
-| **컨테이너** | **Docker**, **Docker Compose** | 개발 환경과 운영 환경의 차이를 없애고, 어떤 클라우드 플랫폼에서든 동일하게 실행되는 표준화된 배포 단위를 만들기 위함. |
-| **오케스트레이션**| **Kubernetes (GKE)** | 컨테이너의 자동 복구, 확장, 무중단 배포를 통해 고가용성 및 탄력성을 확보. GCP의 평생 무료 클러스터 관리 혜택 활용. |
-| **클라우드 플랫폼**| **Google Cloud Platform (GCP)** | AWS 외의 메이저 클라우드 플랫폼 경험을 통해 멀티 클라우드 관리 역량 확보. 평생 무료 VM(`e2-micro`) 제공으로 장기적인 비용 효율성 확보. |
-| **인프라 (IaC)** | **Terraform** | 클라우드 중립적인 업계 표준 IaC 도구. 단일 코드로 여러 클라우드의 리소스를 관리하는 멀티 클라우드 전략의 핵심. |
-| **모니터링** | **Prometheus & Grafana** | 시스템/애플리케이션 메트릭을 직접 수집하고 시각화하여, 데이터 기반의 운영 및 문제 해결 능력을 내재화. |
-| **CI/CD** | **GitHub Actions + Argo CD** | CI(빌드/테스트)와 CD(배포)의 책임을 분리하고, Git을 "신뢰할 수 있는 단일 진실 공급원"으로 사용하는 GitOps 배포 철학 구현. |
-| **데이터베이스** | **PostgreSQL (자체 호스팅)** | NoSQL(DynamoDB) 경험에 더해, 관계형 데이터베이스(SQL)의 모델링 및 쿼리 역량을 확보. GCP의 평생 무료 VM에 Docker로 직접 구축하여 비용 최적화. |
+비용 최적화와 유지보수 효율성을 위해 인프라 구조를 대대적으로 리팩토링했습니다.
 
----
+### 2.1. Phase 1: GKE 기반 고가용성 아키텍처 (Initial)
+> **"확장성과 무중단 배포에 초점을 맞춘 Cloud-Native 학습 단계"**
 
-### **Part 3: 총괄 로드맵 및 단계별 실행 계획**
+![!GKE Architecture](https://github.com/user-attachments/assets/placeholder-gke)
 
-#### **Phase 1: 로컬 환경에서 핵심 기능 완성 (Local First)**
-1.  **프로젝트 셋업**: 신규 Git 저장소(`realtime-chat`) 및 pnpm workspace (`frontend`/`backend`) 구성.
-2.  **백엔드 개발 (Go)**: 기본적인 WebSocket 서버 및 채팅방(Room) 로직 구현. (DB는 인메모리)
-3.  **프론트엔드 개발 (React/Vite)**: WebSocket 통신을 하는 기본 채팅 UI 구현.
-4.  **컨테이너화 (Docker)**: `Dockerfile` 및 `docker-compose.yml`을 작성하여, 로컬에서 전체 시스템을 컨테이너로 실행.
+- **Kubernetes (GKE)**: 컨테이너 오케스트레이션을 통한 자동 복구 및 스케일링
+- **Argo CD & GitOps**: Git을 단일 진실 공급원(SSOT)으로 하는 선언적 배포 파이프라인
+- **Observability**: Prometheus & Grafana를 활용한 메트릭 수집 및 시각화
 
-#### **Phase 2: 클라우드 인프라 구축 (Infrastructure as Code)**
-1.  **클라우드 설정**: GCP 프로젝트 생성 및 Terraform 인증 설정.
-2.  **IaC 작성 (Terraform)**:
-    *   네트워크(VPC), 컨테이너 레지스트리(GCR), 관리형 Kubernetes 클러스터(GKE) 리소스를 코드로 정의.
-    *   **애플리케이션용 VM** (예: `e2-small` 노드 풀)과 **데이터베이스용 평생 무료 VM** (`e2-micro`)을 별도로 정의.
-3.  **인프라 배포**: `terraform apply`를 통해 클라우드에 실제 인프라 생성.
-4.  **DB 설치**: DB용 `e2-micro` VM에 접속하여, Docker를 통해 PostgreSQL 컨테이너를 실행.
+### 2.2. Phase 2: 단일 VM 비용 최적화 아키텍처 (Current)
+> **"월 유지비용 $0를 목표로 한 실용주의적 아키텍처"**
 
-#### **Phase 3: GitOps 기반 배포 자동화 (Deployment Automation)**
-1.  **CI 파이프라인 구축 (GitHub Actions)**: `git push` 시, 코드를 테스트하고 Docker 이미지를 빌드하여 GCR에 푸시하는 워크플로우 작성.
-2.  **Kubernetes 배포 명세 작성**: `Deployment`, `Service`, `Ingress` 등 k8s 리소스를 YAML 파일로 정의하여 Git에서 관리. **Ingress 설정에 WebSocket을 위한 Sticky Session 옵션을 추가**하여 1차적인 확장성 문제를 해결.
-3.  **CD 파이프라인 구축 (Argo CD)**: k8s 클러스터에 Argo CD를 설치하고, Git 저장소의 YAML 파일 변경사항을 클러스터에 자동으로 동기화(배포)하도록 설정.
+![!Single VM Architecture](https://github.com/user-attachments/assets/placeholder-vm)
 
-#### **Phase 4: 관측 가능성 및 최종 통합 (Observability & Final Integration)**
-1.  **모니터링 스택 구축**: Go 백엔드에 `/metrics` 엔드포인트를 노출. k8s 클러스터에 Prometheus를 배포하여 메트릭을 수집. Grafana(자체 호스팅 또는 Grafana Cloud 무료 플랜)로 시각화 대시보드 구축.
-2.  **블로그 연동**: `chat.jungyu.store` 서브도메인을 k8s Ingress에 연결. 기존 블로그 프로젝트의 게시물 상세 페이지에 `<iframe>`을 사용하여 채팅 서비스를 임베드.
-3.  **기능 고도화**:
-    *   **인증**: "익명 + 임시 식별자" 모델을 적용. 프론트엔드에서 `localStorage`에 고유 ID를 생성하고, 사용자가 입력한 닉네임과 함께 백엔드에 전달.
-    *   **데이터 영속성**: Go 백엔드와 PostgreSQL 데이터베이스를 연동하여 대화 기록을 영구적으로 저장.
+- **Docker Compose**: 복잡한 K8s 리소스를 간소화하여 단일 호스트 내에서 서비스 오케스트레이션
+- **Nginx Reverse Proxy**: 로드 밸런싱 및 SSL/TLS 종단 처리
+- **SSH Tunneling**: 외부 IP 노출 없이 로컬에서 안전하게 원격 DB에 접속 및 관리
+- **Cost Optimization**: GKE 클러스터 비용 제거 및 프리티어 VM 활용으로 운영 비용 최소화
 
 ---
 
-### **Part 4: 세부 설계 (Initial Specification)**
+## 3. 핵심 기능 및 주요 성과
 
-#### **4.1. 인증 모델: 익명 + 임시 식별자**
-*   사용자는 별도의 회원가입/로그인 없이, 닉네임만 입력하여 채팅에 참여한다.
-*   프론트엔드는 `localStorage`에 UUIDv4 기반의 `anonymousId`를 생성 및 저장한다.
-*   모든 WebSocket 연결 및 메시지 전송 시, 이 `anonymousId`와 닉네임을 함께 서버로 전달한다.
-*   서버는 `anonymousId`를 기준으로 사용자를 식별하며, 향후 메시지 수정/삭제, 임시 차단 등의 기능 확장을 위한 기반으로 사용한다.
+### 3.1. Infrastructure Cost Optimization
+> **"GKE에서 Single VM으로, 성능 저하 없이 월 $0 달성"**
 
-#### **4.2. 데이터베이스 스키마 (PostgreSQL)**
-```sql
-CREATE TABLE rooms (
-    id VARCHAR(255) PRIMARY KEY, -- 블로그의 postId와 동일
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
+초기에는 학습 목적으로 GKE를 도입했으나, 개인 프로젝트 규모에 비해 높은 비용(Cluster Management Fee 등)이 발생했습니다. 이를 해결하기 위해 아키텍처 다이어트(Architecture Diet)를 감행했습니다.
+- **마이그레이션**: Kubernetes Manifest를 Docker Compose로 변환하고, 인그레스 컨트롤러를 Nginx 설정으로 최적화했습니다.
+- **성과**: 월 10만원 이상 발생하던 고정 클라우드 비용을 **$0(GCP/Oracle Free Tier)** 로 줄이면서도, 서비스의 핵심인 실시간성은 그대로 유지했습니다.
 
-CREATE TABLE messages (
-    id BIGSERIAL PRIMARY KEY,
-    room_id VARCHAR(255) REFERENCES rooms(id) ON DELETE CASCADE,
-    anonymous_id VARCHAR(255) NOT NULL,
-    nickname VARCHAR(50) NOT NULL,
-    content TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
+### 3.2. WebSocket 기반 실시간 통신
+> **"Go Goroutine을 활용한 지연 없는 양방향 통신"**
 
-CREATE INDEX idx_messages_room_created_at ON messages (room_id, created_at DESC);
-```
+- **Go Backend**: Node.js 대비 적은 메모리로 대규모 동시 접속을 처리하기 위해 Go 언어를 선택했습니다. Goroutine과 Channel을 활용해 효율적인 메시지 브로커를 직접 구현했습니다.
+- **Connection Health**: Heartbeat 메커니즘을 도입하여 비정상적인 연결 종료를 즉시 감지하고 리소스를 해제합니다.
+- **Stateless Auth**: JWT 기반 인증을 통해 소켓 연결 시 오버헤드를 줄이고 서버 확장성을 확보했습니다.
 
-#### **4.3. 블로그-채팅 연동 인터페이스**
-*   **방식**: `<iframe>`을 통한 UI 임베딩.
-*   **URL 형식**: `https://chat.jungyu.store/room/{postId}`
-*   **파라미터**:
-    *   `{postId}` (Path Parameter): 참여할 채팅방의 ID. 블로그의 게시물 ID와 일치.
-    *   `theme` (Query Parameter, 선택적): `?theme=dark` 와 같이, 블로그의 현재 테마를 전달하여 `<iframe>` 내부의 스타일을 동적으로 변경.
+### 3.3. IaC & GitOps Automation
+> **"인프라의 코드화(IaC)로 리전마저 자유롭게 이동"**
 
+- **Terraform**: 단순한 VM 생성뿐만 아니라 VPC, 방화벽, 서브넷 등 모든 네트워크 환경을 코드로 정의했습니다. 덕분에 리전 변경(Asia → US)이나 계정 마이그레이션 시 `terraform apply` 한 번으로 동일한 환경을 10분 내에 복구할 수 있었습니다.
+- **CI/CD Pipeline Evolution**:
+    - (Early) GitHub Actions + Argo CD: 이미지 빌드 및 GitOps 배포
+    - (Current) GitHub Actions + SSH Remote: Docker Multi-stage Build로 이미지를 **90% 이상 경량화**하고, 단일 VM에 최적화된 SSH 기반 배포 자동화 구축
 
+### 3.4. Security & UX Engineering
+
+- **SSL/TLS Automation**: Certbot을 Docker 컨테이너로 띄워 Nginx와 연동, Let's Encrypt 인증서의 발급과 갱신을 완전 자동화했습니다.
+- **Seamless Integration**: `iframe` 위젯 형태로 블로그에 채팅 서비스를 통합하면서도, **반응형 디자인**과 **자동 재연결(Auto-reconnect)** 로직을 통해 사용자가 네트워크 단절을 인지하지 못하도록 UX를 고도화했습니다.
 
 ---
 
-### **[기능 명세서] Project Comms: 실시간 채팅 서비스**
+## 4. 기술 스택
 
-**문서 ID:** PC-FS-V1.0
-**버전:** 1.0 (MVP)
-**프로젝트:** 블로그 게시물 연동형 실시간 채팅 서비스
-
----
-
-#### **1. 총괄 요구사항**
-
-1.  **독립성**: 채팅 서비스는 기존 블로그 시스템과 독립적으로 운영되는 별개의 웹 애플리케이션이어야 한다.
-2.  **연동성**: 블로그의 특정 게시물 페이지 내에 `<iframe>`을 통해 자연스럽게 임베드(embed)되어, 마치 블로그의 내장 기능처럼 보여야 한다.
-3.  **실시간성**: 사용자가 보낸 메시지는 WebSocket을 통해 지연 없이 해당 채팅방의 모든 참여자에게 즉시 전달되어야 한다.
-4.  **익명성**: 사용자는 별도의 회원가입이나 로그인 없이, 닉네임 설정만으로 채팅에 참여할 수 있어야 한다.
-
----
-
-#### **2. 핵심 기능 명세**
-
-**2.1. 채팅방 (Room)**
-
-*   **FR-101 (게시물 기반 생성)**: 채팅방은 블로그의 게시물 ID(`postId`)와 1:1로 매칭된다. 사용자는 `.../room/{postId}` URL을 통해 해당 게시물 전용 채팅방에 접근한다.
-*   **FR-102 (방 제목)**: 채팅방 상단에는 해당 게시물의 제목(또는 "게시물 토론방")이 표시되어, 현재 대화의 주제를 명확히 인지할 수 있어야 한다. (API 연동 또는 URL 파라미터 통해 구현)
-
-**2.2. 사용자 인증 및 프로필**
-
-*   **FR-201 (익명 참여)**: 사용자가 채팅방에 처음 입장 시, "사용할 닉네임을 입력하세요"와 같은 모달 또는 입력창이 표시되어야 한다.
-*   **FR-202 (닉네임 설정)**: 사용자는 원하는 닉네임을 설정할 수 있다. 닉네임은 최소 2자, 최대 15자로 제한된다.
-*   **FR-203 (임시 프로필 유지)**: 사용자가 설정한 닉네임과 시스템이 자동으로 부여한 익명 프로필 정보(아바타 등)는 브라우저의 `localStorage`에 저장되어야 한다. 동일한 브라우저로 재방문 시, 다시 닉네임을 입력할 필요 없이 기존 프로필을 유지해야 한다.
-*   **FR-204 (랜덤 프로필)**: 닉네임 설정 시, 시스템은 미리 정의된 여러 개의 프로필 이미지(예: 동물 아바타) 중 하나를 랜덤하게 사용자에게 부여한다. 닉네임은 "익명의 + {동물 이름}"과 같은 형식으로 자동 생성될 수 있다.
-
-**2.3. 메시지 송수신**
-
-*   **FR-301 (메시지 입력)**: 사용자는 텍스트 입력창을 통해 메시지를 작성할 수 있다. `Enter` 키 또는 "전송" 버튼으로 메시지를 보낼 수 있다.
-*   **FR-302 (메시지 표시)**: 채팅 메시지 목록에는 각 메시지의 **작성자 프로필(아바타, 닉네임)**, **내용**, 그리고 **전송 시각**이 표시되어야 한다.
-*   **FR-303 (내 메시지 구분)**: 내가 보낸 메시지는 다른 사람의 메시지와 시각적으로 구분(예: 오른쪽 정렬, 다른 배경색)되어야 한다.
-*   **FR-304 (실시간 수신)**: 내가 참여하고 있는 채팅방에 다른 사용자가 메시지를 보내면, 페이지 새로고침 없이 즉시 채팅 목록 하단에 새로운 메시지가 나타나야 한다.
-*   **FR-305 (자동 스크롤)**: 새로운 메시지가 수신되거나 내가 메시지를 보냈을 때, 채팅 목록은 자동으로 가장 아래로 스크롤되어야 한다. 단, 사용자가 이전 대화를 보기 위해 위로 스크롤한 상태에서는 자동 스크롤이 동작하지 않아야 한다.
-
-**2.4. 대화 기록**
-
-*   **FR-401 (대화 기록 조회)**: 사용자가 채팅방에 입장하면, 해당 방의 최근 대화 기록(예: 최근 50개)이 표시되어야 한다.
-*   **FR-402 (대화 기록 영속성)**: 서버가 재시작되더라도 대화 기록은 사라지지 않고 영구적으로 데이터베이스에 저장되어야 한다.
+| 분류 | 기술 | 선정 이유 및 활용 |
+|:---:|:---:|---|
+| **Backend** | **Go (Golang)** | Goroutine을 이용한 고성능 동시성 처리, 정적 타입 언어의 안정성 |
+| | **Gin Framework** | 가볍고 빠른 Go 웹 프레임워크로 REST API 및 WebSocket 핸들링 |
+| **Frontend** | **React (Vite)** | 컴포넌트 기반 UI 설계, Vite를 이용한 빠른 빌드 및 모듈 교체(HMR) |
+| | **TypeScript** | 엄격한 타입 체크로 런타임 에러 방지 및 유지보수성 향상 |
+| **Infrastructure** | **Docker Compose** | 다중 컨테이너(App, DB, Proxy)의 일관된 실행 환경 보장 |
+| | **Terraform** | 클라우드 인프라 프로비저닝 자동화 및 형상 관리 |
+| | **Nginx** | 리버스 프록시, 정적 파일 서빙, SSL 터미네이션 |
+| **Database** | **PostgreSQL** | 관계형 데이터 모델링 및 트랜잭션 보장 |
+| **DevOps** | **GitHub Actions** | CI/CD 파이프라인 구축 및 배포 프로세스 자동화 |
 
 ---
 
-#### **3. UI/UX 요구사항**
+## 5. 트러블슈팅 및 성능 개선
 
-**3.1. 채팅방 UI**
+### Case 1: WebSocket 연결 유지와 Sticky Session
+- **문제**: 초기 K8s 환경에서 Ingress를 통해 로드 밸런싱을 할 때, 핸드셰이크 요청과 후속 소켓 연결이 서로 다른 파드(Pod)로 연결되어 끊기는 현상 발생.
+- **해결**: Nginx Ingress Controller에 `ip_hash` 및 Sticky Session 어노테이션을 적용하여 클라이언트의 세션이 특정 파드에 고정되도록 네트워크 라우팅 정책을 수정함. VM 환경으로 이전 후에는 Nginx 설정을 통해 동일한 메커니즘 구현.
 
-*   **UI-101 (기본 구성)**: 채팅 UI는 크게 **(1) 헤더(방 제목), (2) 메시지 목록, (3) 메시지 입력창** 세 부분으로 구성된다.
-*   **UI-102 (참여자 목록)**: 현재 채팅방에 참여 중인 사용자 목록과 총인원 수를 표시하는 기능이 있어야 한다. (MVP 이후 고려)
-
-**3.2. 블로그 연동 UI**
-
-*   **UI-201 (임베드)**: 채팅 서비스는 블로그 페이지 내의 `<iframe>` 안에서 모든 기능이 완벽하게 동작해야 한다.
-*   **UI-202 (테마 동기화)**: 블로그 페이지의 테마(라이트/다크 모드)가 변경되면, `<iframe>` 내부의 채팅 서비스 테마도 이에 맞춰 동적으로 변경되어야 한다. (URL 쿼리 파라미터 또는 `postMessage` API 사용)
+### Case 2: Docker 이미지 크기 최적화
+- **문제**: 초기 Go 애플리케이션 빌드 이미지가 300MB를 초과하여 배포 시간이 오래 걸리고 대역폭 낭비 발생.
+- **해결**: Docker **Multi-stage Build**를 적용. 빌드 단계(Golang 이미지)와 실행 단계(Alpine/Scratch 이미지)를 분리하여, 최종 이미지 크기를 **10MB 대**로 90% 이상 경량화 성공.
 
 ---
-
-#### **4. 비기능적 요구사항 (NFR - Non-Functional Requirements)**
-
-**4.1. 성능**
-
-*   **NFR-101 (메시지 전송 속도)**: 사용자가 메시지를 보낸 후 다른 참여자에게 표시되기까지의 지연 시간(end-to-end latency)은 평균 500ms 미만을 목표로 한다.
-
-**4.2. 확장성**
-
-*   **NFR-201 (동시 접속자)**: 백엔드 시스템은 최소 1,000명 이상의 동시 WebSocket 연결을 안정적으로 처리할 수 있도록 설계되어야 한다. (초기 MVP는 단일 인스턴스 기준, 향후 수평 확장 고려)
-
-**4.3. 안정성**
-
-*   **NFR-301 (자동 복구)**: 백엔드 서버 프로세스에 에러가 발생하여 종료되더라도, 시스템(Kubernetes)에 의해 자동으로 재시작되어 서비스 중단을 최소화해야 한다.
-
-**4.4. 비용**
-
-*   **NFR-401 (프리티어 준수)**: 초기 운영 단계에서는 GCP/Azure의 무료 크레딧 및 프리티어 서비스를 최대한 활용하여, 추가적인 비용 발생을 최소화해야 한다.
