@@ -77,14 +77,16 @@ jobs:
             cd ~/app
             
             # GCP Artifact Registry 로그인을 위해 gcloud credential helper 설정
-            # (VM에 서비스 계정이 연결되어 있어도 명시적 설정이 안전함)
             sudo gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
-            #  pull 할 때도 환경 변수 파일이 필요할 수 있으므로 추가 (경고 방지)
+            # 최신 이미지 당겨오기
             sudo docker compose --env-file .env.prod -f docker-compose.prod.yml pull
 
-            #  up 할 때 --env-file .env.prod 옵션 필수 추가!
+            # 1. 백엔드/프론트엔드 등 변경된 컨테이너 먼저 실행
             sudo docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --remove-orphans
+
+            # 2. Nginx 컨테이너 강제 재시작 (DNS 캐시 갱신 목적)
+            sudo docker compose -f docker-compose.prod.yml restart nginx
             
             # 불필요한 이미지 정리 (공간 확보)
             sudo docker image prune -a -f
