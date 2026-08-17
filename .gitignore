@@ -50,3 +50,10 @@ apps/backend/realtime-chat
 infra/gcp-credentials.json
 *.tfstate*
 infra/terraform.tfvars
+
+# =========================================
+# ETC & Markdown
+# =========================================
+*.md
+!README.md
+.md/

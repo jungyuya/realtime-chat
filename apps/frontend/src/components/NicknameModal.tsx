@@ -35,7 +35,6 @@ const NicknameModal = () => {
       localStorage.setItem('sessionToken', token);
 
       // 스토어의 login 액션에 토큰을 전달합니다.
-      // 이 부분은 이전 단계에서 이미 수정되었습니다.
       login(token);
 
     } catch (error) {

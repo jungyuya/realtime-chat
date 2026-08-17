@@ -41,7 +41,7 @@ jobs:
           IMAGE_URI=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/frontend
           # [중요] 도메인 주소로 환경 변수 주입
           docker build \
-            --build-arg VITE_API_BASE_URL=https://chat.jungyu.store \
+            --build-arg VITE_API_BASE_URL=https://chat.jungyu.xyz \
             -t $IMAGE_URI:latest \
             -f apps/frontend/Dockerfile .
           docker push $IMAGE_URI:latest
